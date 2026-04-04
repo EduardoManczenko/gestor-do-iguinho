@@ -1,0 +1,122 @@
+========================================================
+  LISTA DE TAGS - TODOS OS TEMPLATES DO ESCRITÓRIO
+========================================================
+
+DADOS PERFIL CLIENTE
+(campos salvos no registro do cliente)
+
+  -- dados básicos --
+  {NOME_CLIENTE}
+  {NACIONALIDADE_CLIENTE}
+  {ESTADO_CIVIL_CLIENTE}
+  {PROFISSAO_CLIENTE}
+  {CPF_CLIENTE}
+  {TELEFONE_CLIENTE}
+
+  -- endereço --
+  {LOGRADOURO_CLIENTE}
+  {NUMERO_CLIENTE}
+  {COMPLEMENTO_CLIENTE}
+  {BAIRRO_CLIENTE}
+  {CIDADE_CLIENTE}
+  {CEP_CLIENTE}
+
+  -- filiação (usado em PROCURAÇÃO e CONTRATO_HONORARIOS) --
+  {NOME_MAE_CLIENTE}
+  {NOME_PAI_CLIENTE}
+  {NATURALIDADE_CLIENTE}
+  {DATA_NASCIMENTO_CLIENTE}
+  
+
+  -- documento alternativo (usado em docs _SIMPLES e declarações) --
+  {DOCUMENTO_TIPO_CLIENTE}
+  {DOCUMENTO_NUMERO_CLIENTE}
+  {DOCUMENTO_ORGAO_CLIENTE}
+
+
+--------------------------------------------------------
+DADOS TESTEMUNHA
+(preenchidos ao gerar documento que requer testemunha)
+
+  {NOME_TESTEMUNHA}
+  {CPF_TESTEMUNHA}
+  {NACIONALIDADE_TESTEMUNHA}
+  {ESTADO_CIVIL_TESTEMUNHA}
+  {PROFISSAO_TESTEMUNHA}
+  {LOGRADOURO_TESTEMUNHA}
+  {NUMERO_TESTEMUNHA}
+  {BAIRRO_TESTEMUNHA}
+  {CIDADE_TESTEMUNHA}
+  {CEP_TESTEMUNHA}
+  {TELEFONE_TESTEMUNHA}
+
+
+========================================================
+  TAGS ESPECÍFICAS POR DOCUMENTO
+  (preenchidas no formulário ao gerar cada contrato)
+========================================================
+
+--------------------------------------------------------
+1. PROCURAÇÃO PARTICULAR (TEMPLATE_PROCURACAO)
+-------------------------------------------------------
+  {DATA_ATUAL}
+  {FINALIDADE_ESPECIFICA} 
+
+
+--------------------------------------------------------
+2. CONTRATO DE HONORÁRIOS (TEMPLATE_CONTRATO_HONORARIOS)
+--------------------------------------------------------
+  {FINALIDADE_ESPECIFICA} 
+  {VALOR_TOTAL}
+  {VALOR_TOTAL_EXTENSO}
+  {VALOR_ENTRADA}
+  {VALOR_ENTRADA_EXTENSO}
+  {NUMERO_PARCELAS}
+  {VALOR_PARCELA}
+  {VALOR_PARCELA_EXTENSO}
+  {DATA_PRIMEIRA_PARCELA}
+  {DATA_ATUAL}
+
+
+--------------------------------------------------------
+3. DECLARAÇÃO DE HIPOSSUFICIÊNCIA (TEMPLATE_DECLARACAO_HIPOSSUFICIENCIA)
+--------------------------------------------------------
+  {DATA_ATUAL}
+
+
+--------------------------------------------------------
+4. PROCURAÇÃO SIMPLES (TEMPLATE_PROCURACAO_SIMPLES)
+--------------------------------------------------------
+  {FINALIDADE_ESPECIFICA}
+  {DATA_ATUAL}
+
+
+--------------------------------------------------------
+5. CONTRATO DE HONORÁRIOS SIMPLES (TEMPLATE_CONTRATO_HONORARIOS_SIMPLES)
+--------------------------------------------------------
+  {FINALIDADE_ESPECIFICA}
+  {OBJETO_CONTRATO}
+  {HONORARIOS_PERCENTUAL}
+  {DATA_ATUAL}
+
+
+--------------------------------------------------------
+6. DECLARAÇÃO DE ISENÇÃO DE IRPF (TEMPLATE_DECLARACAO_IRPF)
+--------------------------------------------------------
+  {EXERCICIO}
+  {DOCUMENTO_ALTERNATIVO}
+  {DATA_ATUAL}
+
+
+--------------------------------------------------------
+7. DECLARAÇÃO DE TESTEMUNHA (TEMPLATE_DECLARACAO_TESTEMUNHA)
+--------------------------------------------------------
+  {COMARCA}
+  {NOME_AUTOR}
+  {NOME_CONJUGE}
+  {DESCRICAO_IMOVEL}
+  {TEMPO_POSSE}
+  {ANO_INICIO_POSSE}
+  {CONFRONTANTES_NOMES}
+  {CIDADE_DECLARACAO}
+  {DATA_ATUAL}

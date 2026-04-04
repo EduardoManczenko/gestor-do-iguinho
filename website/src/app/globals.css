@@ -1,0 +1,193 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --navy: #1a3050;
+    --navy-light: #254268;
+    --navy-dark: #0f1e33;
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --gold-dark: #a88630;
+    --bg: #f5f4f0;
+    --bg-card: #ffffff;
+    --text: #1a1a2e;
+    --text-muted: #6b7280;
+    --border: #e5e1d8;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5 {
+    font-weight: 600;
+    line-height: 1.3;
+  }
+}
+
+@layer utilities {
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer;
+  }
+
+  .sidebar-link-active {
+    @apply bg-white/15 text-white;
+  }
+
+  .sidebar-link-inactive {
+    @apply text-white/70 hover:bg-white/10 hover:text-white;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl border border-gray-100 shadow-sm;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 cursor-pointer;
+    background-color: var(--navy);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background-color: var(--navy-light);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(26, 48, 80, 0.3);
+  }
+
+  .btn-gold {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 cursor-pointer;
+    background-color: var(--gold);
+    color: white;
+  }
+
+  .btn-gold:hover {
+    background-color: var(--gold-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(201, 168, 76, 0.4);
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm border-2 transition-all duration-200 cursor-pointer;
+    border-color: var(--navy);
+    color: var(--navy);
+    background: transparent;
+  }
+
+  .btn-outline:hover {
+    background-color: var(--navy);
+    color: white;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer text-gray-600 hover:bg-gray-100 hover:text-gray-900;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 cursor-pointer bg-red-50 text-red-600 hover:bg-red-600 hover:text-white;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border-2 border-gray-200 text-sm font-medium transition-all duration-200 outline-none;
+    background: white;
+  }
+
+  .input-field:focus {
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(26, 48, 80, 0.1);
+  }
+
+  .input-field::placeholder {
+    color: #9ca3af;
+    font-weight: 400;
+  }
+
+  .label-field {
+    @apply block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .badge-navy {
+    background-color: #e8edf4;
+    color: var(--navy);
+  }
+
+  .badge-gold {
+    background-color: #fdf5e0;
+    color: var(--gold-dark);
+  }
+
+  .badge-green {
+    @apply bg-emerald-50 text-emerald-700;
+  }
+
+  .badge-red {
+    @apply bg-red-50 text-red-700;
+  }
+
+  .section-title {
+    @apply text-xl font-bold;
+    color: var(--navy);
+  }
+
+  .page-title {
+    @apply text-3xl font-bold;
+    color: var(--navy);
+  }
+
+  .divider {
+    @apply border-t border-gray-100 my-6;
+  }
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Animações */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease forwards;
+}

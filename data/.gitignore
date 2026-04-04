@@ -1,0 +1,5 @@
+# Ignorar dados dos clientes (informações sensíveis)
+clientes/
+
+# Manter a estrutura da pasta
+!.gitignore
