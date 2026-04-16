@@ -25,12 +25,16 @@ export interface DadosCliente {
 
 export interface Contrato {
   id: string;
-  template: string;
+  templateId: string;
   nomeTemplate: string;
-  criadoEm: string;
-  dadosExtras: Record<string, string>;
-  arquivoDOCX: string;
-  clienteId: string;
+  geradoEm: string;
+  nomeArquivo: string;
+  // campos legados (mantidos para compatibilidade)
+  template?: string;
+  criadoEm?: string;
+  dadosExtras?: Record<string, string>;
+  arquivoDOCX?: string;
+  clienteId?: string;
 }
 
 export interface Cliente {
@@ -71,6 +75,27 @@ export interface DadosTestemunha {
   TELEFONE_TESTEMUNHA: string;
 }
 
+export type TipoEvento =
+  | 'CLIENTE_CRIADO'
+  | 'CLIENTE_ATUALIZADO'
+  | 'CLIENTE_DELETADO'
+  | 'CONTRATO_GERADO'
+  | 'CONTRATO_DELETADO'
+  | 'DOCUMENTO_ESCANEADO'
+  | 'PASTA_ALTERADA'
+  | 'BACKUP_EXPORTADO'
+  | 'BACKUP_IMPORTADO';
+
+export interface EventoHistorico {
+  id: string;
+  tipo: TipoEvento;
+  data: string; // ISO 8601
+  nomeCliente?: string;
+  clienteId?: string;
+  descricao: string;
+  detalhes?: Record<string, string>;
+}
+
 export interface PessoaCertidao {
   nome: string;
   naturalidade?: string;
@@ -78,6 +103,7 @@ export interface PessoaCertidao {
   nacionalidade?: string;
   nomePai?: string;
   nomeMae?: string;
+  estadoCivil?: string;
   papel: 'ele' | 'ela' | 'filho' | 'filha';
 }
 

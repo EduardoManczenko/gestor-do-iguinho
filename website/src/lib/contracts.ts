@@ -2,10 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
-import { TEMPLATES_DIR } from './storage';
 import { DadosCliente, DadosTestemunha } from './types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+const TEMPLATES_DIR = path.join(process.cwd(), '..', 'contratos-template');
 
 function dataAtualFormatada(): string {
   return format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });

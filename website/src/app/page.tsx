@@ -8,19 +8,21 @@ import { formatarDataHora } from '@/lib/utils';
 
 export default function Dashboard() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [paths, setPaths] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/clientes').then((r) => r.json()),
-      fetch('/api/paths').then((r) => r.json()),
-    ]).then(([c, p]) => {
-      setClientes(Array.isArray(c) ? c : []);
-      setPaths(p);
-      setLoading(false);
-    });
-  }, []);
+  useEffect(() => { carregarDados(); }, []);
+
+  async function carregarDados() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/clientes');
+      const data = await res.json();
+      setClientes(Array.isArray(data) ? data : []);
+    } catch {
+      setClientes([]);
+    }
+    setLoading(false);
+  }
 
   const totalContratos = clientes.reduce((acc, c) => acc + (c.contratos?.length || 0), 0);
   const recentes = clientes.slice(0, 5);
@@ -50,9 +52,7 @@ export default function Dashboard() {
           >
             <Scale size={20} className="text-white" />
           </div>
-          <div>
-            <h1 className="page-title">Bem-vindo ao Gestor Jurídico</h1>
-          </div>
+          <h1 className="page-title">Bem-vindo ao Gestor Jurídico</h1>
         </div>
         <p className="text-gray-500 mt-2 ml-[52px]">
           Gerencie seus clientes e gere contratos com facilidade
@@ -63,50 +63,39 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center"
-              style={{ background: '#e8edf4' }}
-            >
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: '#e8edf4' }}>
               <Users size={22} style={{ color: '#1a3050' }} />
             </div>
             <span className="badge badge-navy">Total</span>
           </div>
-          <div className="text-3xl font-bold mb-1" style={{ color: '#1a3050' }}>
-            {clientes.length}
-          </div>
+          <div className="text-3xl font-bold mb-1" style={{ color: '#1a3050' }}>{clientes.length}</div>
           <div className="text-sm text-gray-500 font-medium">Clientes cadastrados</div>
         </div>
 
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center"
-              style={{ background: '#fdf5e0' }}
-            >
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: '#fdf5e0' }}>
               <FileText size={22} style={{ color: '#c9a84c' }} />
             </div>
             <span className="badge badge-gold">Total</span>
           </div>
-          <div className="text-3xl font-bold mb-1" style={{ color: '#1a3050' }}>
-            {totalContratos}
-          </div>
+          <div className="text-3xl font-bold mb-1" style={{ color: '#1a3050' }}>{totalContratos}</div>
           <div className="text-sm text-gray-500 font-medium">Contratos gerados</div>
         </div>
 
-        <div className="card p-6">
+        <Link
+          href="/dados"
+          className="card p-6 hover:border-gray-200 hover:shadow-md transition-all duration-200 group"
+        >
           <div className="flex items-center justify-between mb-4">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center bg-emerald-50"
-            >
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-emerald-50 group-hover:scale-105 transition-transform">
               <FolderOpen size={22} className="text-emerald-600" />
             </div>
-            <span className="badge badge-green">Local</span>
+            <ArrowRight size={16} className="text-gray-300 group-hover:text-gray-500 group-hover:translate-x-0.5 transition-all" />
           </div>
-          <div className="text-sm font-semibold mb-1 text-gray-700">Armazenamento</div>
-          <div className="text-xs text-gray-400 break-all leading-relaxed font-mono">
-            {paths.dataDir || '...'}
-          </div>
-        </div>
+          <div className="text-sm font-semibold mb-1 text-gray-700">Dados &amp; Backup</div>
+          <div className="text-xs text-gray-400">Gerenciar pasta e fazer backup</div>
+        </Link>
       </div>
 
       {/* Quick Actions */}
@@ -122,12 +111,8 @@ export default function Dashboard() {
             <Plus size={24} className="text-white" />
           </div>
           <div className="flex-1">
-            <div className="font-bold text-base mb-1" style={{ color: '#1a3050' }}>
-              Cadastrar Cliente
-            </div>
-            <div className="text-sm text-gray-500">
-              Adicionar novo cliente com leitura de documentos
-            </div>
+            <div className="font-bold text-base mb-1" style={{ color: '#1a3050' }}>Cadastrar Cliente</div>
+            <div className="text-sm text-gray-500">Adicionar novo cliente com leitura de documentos</div>
           </div>
           <ArrowRight size={18} className="text-gray-300 group-hover:text-gray-500 group-hover:translate-x-1 transition-all" />
         </Link>
@@ -143,12 +128,8 @@ export default function Dashboard() {
             <FileText size={24} className="text-white" />
           </div>
           <div className="flex-1">
-            <div className="font-bold text-base mb-1" style={{ color: '#1a3050' }}>
-              Gerar Contrato
-            </div>
-            <div className="text-sm text-gray-500">
-              Preencher e exportar documentos jurídicos
-            </div>
+            <div className="font-bold text-base mb-1" style={{ color: '#1a3050' }}>Gerar Contrato</div>
+            <div className="text-sm text-gray-500">Preencher e exportar documentos jurídicos</div>
           </div>
           <ArrowRight size={18} className="text-gray-300 group-hover:text-gray-500 group-hover:translate-x-1 transition-all" />
         </Link>
@@ -186,9 +167,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="badge badge-navy">
-                    {cliente.contratos?.length || 0} contrato(s)
-                  </span>
+                  <span className="badge badge-navy">{cliente.contratos?.length || 0} contrato(s)</span>
                   <ArrowRight size={16} className="text-gray-300" />
                 </div>
               </Link>
@@ -205,9 +184,7 @@ export default function Dashboard() {
           >
             <Users size={36} style={{ color: '#1a3050' }} />
           </div>
-          <h3 className="text-xl font-bold mb-2" style={{ color: '#1a3050' }}>
-            Nenhum cliente ainda
-          </h3>
+          <h3 className="text-xl font-bold mb-2" style={{ color: '#1a3050' }}>Nenhum cliente ainda</h3>
           <p className="text-gray-400 mb-8 max-w-sm mx-auto">
             Comece cadastrando seu primeiro cliente. Você pode ler os dados diretamente dos documentos escaneados.
           </p>

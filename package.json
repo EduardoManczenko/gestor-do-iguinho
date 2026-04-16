@@ -1,0 +1,59 @@
+{
+  "name": "gestor-juridico",
+  "version": "1.0.0",
+  "description": "Gestor de clientes e geração de contratos jurídicos",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"cd website && npm run dev -- -p 3157\" \"wait-on http://localhost:3157 && electron .\"",
+    "build:next": "cd website && npm run build",
+    "start:next": "cd website && npx next start -p 3157",
+    "electron": "electron .",
+    "start": "npm run build:next && electron .",
+    "dist": "npm run build:next && electron-builder",
+    "dist:win": "npm run build:next && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.gestor.juridico",
+    "productName": "Gestor Jurídico",
+    "asar": true,
+    "directories": {
+      "output": "dist-app",
+      "buildResources": "assets"
+    },
+    "files": [
+      "electron/**/*",
+      "website/.next/**/*",
+      "website/node_modules/**/*",
+      "website/package.json",
+      "website/next.config.ts",
+      "contratos-template/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "contratos-template",
+        "to": "contratos-template",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowDirChange": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Gestor Jurídico"
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^36.3.0",
+    "electron-builder": "^25.1.8",
+    "wait-on": "^8.0.3"
+  }
+}

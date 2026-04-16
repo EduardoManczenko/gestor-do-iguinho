@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { buscarCliente, salvarCliente, deletarCliente, copiarDocumentosParaCliente } from '@/lib/storage';
+import {
+  buscarCliente, salvarCliente, deletarCliente,
+  copiarArquivosScanner, registrarEvento
+} from '@/lib/storage';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,34 +16,43 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const cliente = buscarCliente(id);
   if (!cliente) return NextResponse.json({ erro: 'Cliente não encontrado' }, { status: 404 });
 
-  try {
-    const body = await req.json();
-    const atualizado = {
-      ...cliente,
-      dados: { ...cliente.dados, ...body.dados },
-      contratos: body.contratos ?? cliente.contratos,
-      atualizadoEm: new Date().toISOString(),
-    };
+  const body = await req.json();
+  const { dados, contratos, arquivosScanner, pastaScanner } = body;
 
-    // Adicionar novos documentos do scanner se enviados
-    if (body.arquivosScanner && Array.isArray(body.arquivosScanner) && body.arquivosScanner.length > 0) {
-      const docsNovos = copiarDocumentosParaCliente(id, body.arquivosScanner);
-      const existentes = atualizado.documentos || [];
-      atualizado.documentos = [...new Set([...existentes, ...docsNovos])];
-    } else {
-      atualizado.documentos = atualizado.documentos || [];
-    }
+  const atualizado = {
+    ...cliente,
+    dados: dados ?? cliente.dados,
+    contratos: contratos ?? cliente.contratos,
+    atualizadoEm: new Date().toISOString(),
+  };
 
+  salvarCliente(atualizado);
+
+  // Copia novos documentos escaneados
+  if (arquivosScanner?.length && pastaScanner) {
+    const copiados = copiarArquivosScanner(id, arquivosScanner, pastaScanner);
+    atualizado.documentos = [...new Set([...(atualizado.documentos || []), ...copiados])];
     salvarCliente(atualizado);
-    return NextResponse.json(atualizado);
-  } catch (error) {
-    return NextResponse.json({ erro: 'Erro ao atualizar cliente', detalhe: String(error) }, { status: 500 });
   }
+
+  registrarEvento('CLIENTE_ATUALIZADO', `Cliente atualizado: ${atualizado.dados.NOME_CLIENTE || 'sem nome'}`, {
+    nomeCliente: atualizado.dados.NOME_CLIENTE,
+    clienteId: id,
+  });
+
+  return NextResponse.json(atualizado);
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const ok = deletarCliente(id);
-  if (!ok) return NextResponse.json({ erro: 'Cliente não encontrado' }, { status: 404 });
+  const cliente = buscarCliente(id);
+  if (!cliente) return NextResponse.json({ erro: 'Cliente não encontrado' }, { status: 404 });
+
+  deletarCliente(id);
+  registrarEvento('CLIENTE_DELETADO', `Cliente excluído: ${cliente.dados.NOME_CLIENTE || 'sem nome'}`, {
+    nomeCliente: cliente.dados.NOME_CLIENTE,
+    clienteId: id,
+  });
+
   return NextResponse.json({ sucesso: true });
 }

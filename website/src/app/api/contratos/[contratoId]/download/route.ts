@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { buscarCliente, listarClientes, lerContratoDOCX } from '@/lib/storage';
+import { buscarCliente, getContratoDOCXPath } from '@/lib/storage';
+import fs from 'fs';
 
 export async function GET(
   _req: Request,
@@ -7,41 +8,25 @@ export async function GET(
 ) {
   const { contratoId } = await params;
 
-  try {
-    // Buscar o contrato em todos os clientes
-    const clientes = listarClientes();
-    let clienteId = '';
-    let templateId = '';
-    let nomeContrato = '';
+  // Procura o contrato em todos os clientes
+  const clientesDir = (await import('@/lib/storage')).getClientesDir();
+  const clientes = (await import('@/lib/storage')).getClientes();
 
-    for (const cliente of clientes) {
-      const contrato = (cliente.contratos || []).find((c) => c.id === contratoId);
-      if (contrato) {
-        clienteId = cliente.id;
-        templateId = contrato.template;
-        nomeContrato = contrato.nomeTemplate;
-        break;
+  for (const cliente of clientes) {
+    const contrato = cliente.contratos?.find((c) => c.id === contratoId);
+    if (contrato) {
+      const filePath = getContratoDOCXPath(cliente.id, contratoId);
+      if (filePath && fs.existsSync(filePath)) {
+        const buffer = fs.readFileSync(filePath);
+        return new NextResponse(buffer, {
+          headers: {
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Content-Disposition': `attachment; filename="${contrato.nomeArquivo || contratoId + '.docx'}"`,
+          },
+        });
       }
     }
-
-    if (!clienteId) {
-      return NextResponse.json({ erro: 'Contrato não encontrado' }, { status: 404 });
-    }
-
-    const buffer = lerContratoDOCX(clienteId, contratoId, templateId);
-    if (!buffer) {
-      return NextResponse.json({ erro: 'Arquivo do contrato não encontrado' }, { status: 404 });
-    }
-
-    const nomeArquivo = `${nomeContrato.replace(/\s+/g, '_')}.docx`;
-
-    return new NextResponse(new Uint8Array(buffer), {
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(nomeArquivo)}`,
-      },
-    });
-  } catch (error) {
-    return NextResponse.json({ erro: 'Erro ao baixar contrato', detalhe: String(error) }, { status: 500 });
   }
+
+  return NextResponse.json({ erro: 'Contrato não encontrado' }, { status: 404 });
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ScanLine, CheckCircle, AlertCircle, Loader2,
   ChevronDown, ChevronUp, Square, CheckSquare, Scan, FolderOpen, Users
@@ -8,7 +8,7 @@ import {
 import { DadosCliente, PessoaCertidao, ResultadoExtracao } from '@/lib/types';
 import { cn, brDateToISO } from '@/lib/utils';
 
-// Campos que pertencem exclusivamente à pessoa (não podem vir de documentos de terceiros)
+// Campos pessoais (não podem vir de documentos de terceiros)
 const CAMPOS_PESSOAIS = new Set<keyof DadosCliente>([
   'NOME_CLIENTE', 'CPF_CLIENTE', 'DATA_NASCIMENTO_CLIENTE', 'NOME_PAI_CLIENTE',
   'NOME_MAE_CLIENTE', 'NATURALIDADE_CLIENTE', 'NACIONALIDADE_CLIENTE',
@@ -16,23 +16,20 @@ const CAMPOS_PESSOAIS = new Set<keyof DadosCliente>([
   'DOCUMENTO_TIPO_CLIENTE', 'DOCUMENTO_NUMERO_CLIENTE', 'DOCUMENTO_ORGAO_CLIENTE',
 ]);
 
-// Campos de endereço — podem vir de qualquer documento (ex: conta de luz no nome do cônjuge)
 const CAMPOS_ENDERECO = new Set<keyof DadosCliente>([
   'LOGRADOURO_CLIENTE', 'NUMERO_CLIENTE', 'COMPLEMENTO_CLIENTE',
   'BAIRRO_CLIENTE', 'CIDADE_CLIENTE', 'CEP_CLIENTE',
 ]);
 
-// Verifica se dois nomes têm pelo menos uma palavra significativa em comum
-function nomesCompatíveis(nomePrimario: string, nomeDocumento: string): boolean {
-  if (!nomePrimario || !nomeDocumento) return true; // sem nome = não filtra
+function nomesCompatíveis(a: string, b: string): boolean {
+  if (!a || !b) return true;
   const norm = (s: string) =>
     s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().split(/\s+/);
-  const pa = norm(nomePrimario).filter(w => w.length > 3);
-  const pb = norm(nomeDocumento).filter(w => w.length > 3);
+  const pa = norm(a).filter(w => w.length > 3);
+  const pb = norm(b).filter(w => w.length > 3);
   return pa.some(w => pb.includes(w));
 }
 
-// Aplica conversão de data onde necessário e retorna os dados normalizados
 function normalizarDados(dados: Partial<DadosCliente>): Partial<DadosCliente> {
   const r = { ...dados };
   if (r.DATA_NASCIMENTO_CLIENTE) r.DATA_NASCIMENTO_CLIENTE = brDateToISO(r.DATA_NASCIMENTO_CLIENTE);
@@ -49,43 +46,91 @@ interface ResultadoMultiplo {
 }
 
 interface Props {
-  onDadosExtraidos: (dados: Partial<DadosCliente>, arquivosSelecionados: string[]) => void;
+  onDadosExtraidos: (dados: Partial<DadosCliente>, arquivos: string[], pasta: string) => void;
+}
+
+declare global {
+  interface Window {
+    electronAPI?: {
+      selectFolder: (startPath?: string) => Promise<{ pasta?: string; cancelado?: boolean }>;
+      selectFile: (filters?: { name: string; extensions: string[] }[]) => Promise<{ arquivo?: string; cancelado?: boolean }>;
+    };
+  }
 }
 
 export default function DocumentScanner({ onDadosExtraidos }: Props) {
   const [aberto, setAberto] = useState(false);
+  const [pastaScanner, setPastaScanner] = useState('');
   const [arquivos, setArquivos] = useState<string[]>([]);
-  const [carregandoLista, setCarregandoLista] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [carregandoArquivos, setCarregandoArquivos] = useState(false);
   const [processando, setProcessando] = useState(false);
-  const [progresso, setProgresso] = useState(0);
-  const [resultado, setResultado] = useState<ResultadoMultiplo | null>(null);
-  const [diretorio, setDiretorio] = useState('');
-  const [pessoasPendentes, setPessoasPendentes] = useState<{ pessoas: PessoaCertidao[]; arquivo: string } | null>(null);
+  const [resultados, setResultados] = useState<ResultadoMultiplo | null>(null);
+  const [pessoasCertidao, setPessoasCertidao] = useState<PessoaCertidao[]>([]);
+  const [pessoaSelecionada, setPessoaSelecionada] = useState<number | null>(null);
+  const [erro, setErro] = useState('');
 
-  const carregarArquivos = async () => {
-    if (aberto) {
-      setAberto(false);
-      return;
-    }
-    setCarregandoLista(true);
-    setAberto(true);
-    setResultado(null);
-    setSelecionados(new Set());
+  // Carrega pasta do scanner salva
+  useEffect(() => {
+    fetch('/api/config')
+      .then(r => r.json())
+      .then(cfg => {
+        if (cfg.scannerDir) {
+          setPastaScanner(cfg.scannerDir);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Lista arquivos quando a pasta muda
+  useEffect(() => {
+    if (!pastaScanner) return;
+    listarArquivos(pastaScanner);
+  }, [pastaScanner]);
+
+  const listarArquivos = async (pasta: string) => {
+    setCarregandoArquivos(true);
     try {
-      const res = await fetch('/api/scanner');
+      const res = await fetch(`/api/scanner?pasta=${encodeURIComponent(pasta)}`);
       const data = await res.json();
       setArquivos(data.arquivos || []);
-      setDiretorio(data.diretorio || '');
     } catch {
       setArquivos([]);
     } finally {
-      setCarregandoLista(false);
+      setCarregandoArquivos(false);
+    }
+  };
+
+  const selecionarPasta = async () => {
+    if (window.electronAPI) {
+      const resultado = await window.electronAPI.selectFolder(pastaScanner);
+      if (resultado.cancelado || !resultado.pasta) return;
+      const novaPasta = resultado.pasta;
+      setPastaScanner(novaPasta);
+      setSelecionados(new Set());
+      setResultados(null);
+      await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scannerDir: novaPasta }),
+      });
+    } else {
+      // Fallback: prompt simples
+      const novaPasta = prompt('Digite o caminho da pasta de documentos escaneados:', pastaScanner);
+      if (!novaPasta) return;
+      setPastaScanner(novaPasta);
+      setSelecionados(new Set());
+      setResultados(null);
+      await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scannerDir: novaPasta }),
+      });
     }
   };
 
   const toggleSelecionado = (arquivo: string) => {
-    setSelecionados((prev) => {
+    setSelecionados(prev => {
       const novo = new Set(prev);
       if (novo.has(arquivo)) novo.delete(arquivo);
       else novo.add(arquivo);
@@ -101,395 +146,287 @@ export default function DocumentScanner({ onDadosExtraidos }: Props) {
     }
   };
 
-  const processarSelecionados = async () => {
-    if (selecionados.size === 0) return;
-    setProcessando(true);
-    setProgresso(0);
-    setResultado(null);
+  const mesclarResultados = (resultadosList: ResultadoArquivo[]): Partial<DadosCliente> => {
+    let dadosMesclados: Partial<DadosCliente> = {};
+    let nomeBase = '';
 
-    try {
-      const arquivosList = Array.from(selecionados);
+    for (const resultado of resultadosList) {
+      const dados = normalizarDados(resultado.dados);
 
-      // Processar progressivamente para dar feedback visual
-      const resultadosArquivos: ResultadoArquivo[] = [];
-      let dadosMesclados: Partial<DadosCliente> = {};
+      // Primeiro documento — define base de nome
+      if (!nomeBase && dados.NOME_CLIENTE) {
+        nomeBase = dados.NOME_CLIENTE;
+      }
 
-      for (let i = 0; i < arquivosList.length; i++) {
-        setProgresso(Math.round((i / arquivosList.length) * 100));
-        const res = await fetch('/api/scanner', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ arquivo: arquivosList[i] }),
-        });
-        const data: ResultadoExtracao = await res.json();
-        resultadosArquivos.push({ ...data, arquivo: arquivosList[i] });
+      // Campos pessoais: só aceitar se compatível com nome base
+      for (const campo of CAMPOS_PESSOAIS) {
+        const val = (dados as Record<string, string>)[campo];
+        if (!val) continue;
 
-        if (data.sucesso) {
-          const dadosNorm = normalizarDados(data.dados);
-          const nomePrimario = dadosMesclados.NOME_CLIENTE || '';
-          const nomeDocumento = (dadosNorm.NOME_CLIENTE as string) || '';
+        if (campo === 'NOME_CLIENTE') {
+          if (!dadosMesclados.NOME_CLIENTE) {
+            dadosMesclados.NOME_CLIENTE = val;
+            nomeBase = val;
+          }
+          continue;
+        }
 
-          // Verifica se este documento parece ser da mesma pessoa já identificada
-          const mesmaPessoa = nomesCompatíveis(nomePrimario, nomeDocumento);
+        const nomeDocumento = dados.NOME_CLIENTE;
+        const compatível = !nomeDocumento || nomesCompatíveis(nomeBase, nomeDocumento);
+        if (compatível && !(dadosMesclados as Record<string, string>)[campo]) {
+          (dadosMesclados as Record<string, string>)[campo] = val;
+        }
+      }
 
-          // Comprovantes de utilidade (energia, água) podem ter endereço em outro nome → sempre mescla endereço
-          // Declarações de residência: endereço só mescla se for da mesma pessoa
-          //   (declaração de terceiro já extrai o endereço correto do beneficiário na API)
-          const tipoDoc = data.tipoDocumento || '';
-          // ATENÇÃO: usar comparação exata — "DECLARAÇÃO DE RESIDÊNCIA" NÃO é comprovante
-          const ehComprovante = tipoDoc === 'COMPROVANTE DE ENERGIA' || tipoDoc === 'COMPROVANTE DE RESIDÊNCIA';
+      // Endereço: aceitar de documentos pessoais ou comprovantes de residência
+      const tipoDoc = resultado.tipoDocumento || '';
+      const ehDocPessoal = ['CNH', 'RG'].includes(tipoDoc);
+      const ehComprovanteOuDeclaracao = tipoDoc.includes('COMPROVANTE') || tipoDoc.includes('DECLARAÇÃO');
 
-          for (const [k, v] of Object.entries(dadosNorm)) {
-            const campo = k as keyof DadosCliente;
-            if (!v || (dadosMesclados as Record<string, string>)[k]) continue;
+      if (ehDocPessoal || ehComprovanteOuDeclaracao) {
+        const nomeDocumento = dados.NOME_CLIENTE;
+        const compatível = !nomeDocumento || nomesCompatíveis(nomeBase, nomeDocumento);
 
-            if (CAMPOS_PESSOAIS.has(campo)) {
-              // Dados pessoais: só mescla se for a mesma pessoa (ou não há nome definido ainda)
-              if (!nomePrimario || !nomeDocumento || mesmaPessoa) {
-                (dadosMesclados as Record<string, string>)[k] = v as string;
-              }
-            } else if (CAMPOS_ENDERECO.has(campo)) {
-              // Comprovantes de energia/água: mescla endereço mesmo em outro nome
-              // Para outros documentos: mescla endereço só se for da mesma pessoa
-              if (ehComprovante || !nomePrimario || !nomeDocumento || mesmaPessoa) {
-                (dadosMesclados as Record<string, string>)[k] = v as string;
-              }
+        if (compatível || ehComprovanteOuDeclaracao) {
+          for (const campo of CAMPOS_ENDERECO) {
+            const val = (dados as Record<string, string>)[campo];
+            if (val && !(dadosMesclados as Record<string, string>)[campo]) {
+              (dadosMesclados as Record<string, string>)[campo] = val;
             }
           }
         }
       }
+    }
 
-      setProgresso(100);
-      setResultado({ dadosMesclados, resultados: resultadosArquivos });
+    return dadosMesclados;
+  };
 
-      // Verificar se algum documento tem múltiplas pessoas (certidão de casamento)
-      const comPessoas = resultadosArquivos.find(r => r.pessoasCertidao && r.pessoasCertidao.length > 1);
-      if (comPessoas && comPessoas.pessoasCertidao) {
-        setPessoasPendentes({ pessoas: comPessoas.pessoasCertidao, arquivo: comPessoas.arquivo });
-      } else if (Object.keys(dadosMesclados).length > 0) {
-        onDadosExtraidos(normalizarDados(dadosMesclados), arquivosList);
+  const escanear = async () => {
+    if (selecionados.size === 0) return;
+    setProcessando(true);
+    setErro('');
+    setResultados(null);
+    setPessoasCertidao([]);
+    setPessoaSelecionada(null);
+
+    try {
+      const resultadosList: ResultadoArquivo[] = [];
+
+      for (const arquivo of Array.from(selecionados)) {
+        const res = await fetch('/api/scanner', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ arquivo, pastaScanner }),
+        });
+        const data: ResultadoExtracao = await res.json();
+        resultadosList.push({ ...data, arquivo });
+
+        // Coleta pessoas de certidão de casamento
+        if (data.pessoasCertidao?.length) {
+          setPessoasCertidao(prev => [...prev, ...data.pessoasCertidao!]);
+        }
+      }
+
+      const dadosMesclados = mesclarResultados(resultadosList);
+
+      setResultados({ dadosMesclados, resultados: resultadosList });
+
+      // Se há pessoas de certidão, aguarda seleção
+      if (pessoasCertidao.length === 0) {
+        onDadosExtraidos(dadosMesclados, Array.from(selecionados), pastaScanner);
       }
     } catch {
-      setResultado({
-        dadosMesclados: {},
-        resultados: [{ sucesso: false, dados: {}, confianca: 'baixa', mensagem: 'Erro ao processar documentos.', arquivo: '' }],
-      });
+      setErro('Erro ao processar documentos. Tente novamente.');
     } finally {
       setProcessando(false);
     }
   };
 
-  const selecionarPessoaCertidao = (pessoa: PessoaCertidao, arquivosList: string[]) => {
-    // Dados da pessoa selecionada na certidão (têm prioridade máxima)
-    const dadosPessoa: Partial<DadosCliente> = {};
-    if (pessoa.nome) dadosPessoa.NOME_CLIENTE = pessoa.nome;
-    if (pessoa.naturalidade) dadosPessoa.NATURALIDADE_CLIENTE = pessoa.naturalidade;
-    if (pessoa.dataNascimento) dadosPessoa.DATA_NASCIMENTO_CLIENTE = brDateToISO(pessoa.dataNascimento);
-    if (pessoa.nacionalidade) dadosPessoa.NACIONALIDADE_CLIENTE = pessoa.nacionalidade;
-    if (pessoa.nomePai) dadosPessoa.NOME_PAI_CLIENTE = pessoa.nomePai;
-    if (pessoa.nomeMae) dadosPessoa.NOME_MAE_CLIENTE = pessoa.nomeMae;
-    dadosPessoa.ESTADO_CIVIL_CLIENTE = 'CASADO(A)';
+  const selecionarPessoaCertidao = (idx: number) => {
+    if (!resultados) return;
+    setPessoaSelecionada(idx);
+    const pessoa = pessoasCertidao[idx];
 
-    if (!resultado) {
-      onDadosExtraidos(dadosPessoa, arquivosList);
-      setPessoasPendentes(null);
-      return;
-    }
+    const dadosComPessoa: Partial<DadosCliente> = {
+      ...resultados.dadosMesclados,
+      NOME_CLIENTE: pessoa.nome || resultados.dadosMesclados.NOME_CLIENTE,
+      ESTADO_CIVIL_CLIENTE: pessoa.estadoCivil || resultados.dadosMesclados.ESTADO_CIVIL_CLIENTE,
+      DATA_NASCIMENTO_CLIENTE: pessoa.dataNascimento
+        ? brDateToISO(pessoa.dataNascimento)
+        : resultados.dadosMesclados.DATA_NASCIMENTO_CLIENTE,
+      NATURALIDADE_CLIENTE: pessoa.naturalidade || resultados.dadosMesclados.NATURALIDADE_CLIENTE,
+    };
 
-    // Mesclagem inteligente: dados da certidão têm prioridade sobre os anteriores,
-    // mas mantemos endereço e outros campos já extraídos que não vêm na certidão
-    const dadosMescladosFinal: Partial<DadosCliente> = {};
-
-    // 1. Aplica dados dos documentos anteriores (endereço + campos não-pessoais)
-    for (const [k, v] of Object.entries(resultado.dadosMesclados)) {
-      const campo = k as keyof DadosCliente;
-      if (v && CAMPOS_ENDERECO.has(campo)) {
-        (dadosMescladosFinal as Record<string, string>)[k] = v as string;
-      }
-    }
-
-    // 2. Aplica dados da pessoa selecionada (têm prioridade sobre tudo)
-    for (const [k, v] of Object.entries(dadosPessoa)) {
-      if (v) (dadosMescladosFinal as Record<string, string>)[k] = v as string;
-    }
-
-    // 3. Complementa com campos pessoais dos documentos anteriores que a certidão não cobre
-    //    (ex: CPF da CNH, número do documento) — só se a pessoa for a mesma
-    for (const [k, v] of Object.entries(resultado.dadosMesclados)) {
-      const campo = k as keyof DadosCliente;
-      if (v && CAMPOS_PESSOAIS.has(campo) && !(dadosMescladosFinal as Record<string, string>)[k]) {
-        const nomePrimario = dadosPessoa.NOME_CLIENTE || '';
-        const nomeOriginal = (resultado.dadosMesclados.NOME_CLIENTE as string) || '';
-        if (!nomePrimario || !nomeOriginal || nomesCompatíveis(nomePrimario, nomeOriginal)) {
-          (dadosMescladosFinal as Record<string, string>)[k] = v as string;
-        }
-      }
-    }
-
-    setPessoasPendentes(null);
-    onDadosExtraidos(dadosMescladosFinal, arquivosList);
+    onDadosExtraidos(dadosComPessoa, Array.from(selecionados), pastaScanner);
   };
-
-  const confiancaConfig = {
-    alta: { cor: 'badge-green', label: 'Alta' },
-    media: { cor: 'badge-gold', label: 'Média' },
-    baixa: { cor: 'badge-red', label: 'Baixa' },
-  };
-
-  const totalCamposExtraidos = resultado ? Object.keys(resultado.dadosMesclados).length : 0;
-
-  // Modal de seleção de pessoa (certidão de casamento)
-  if (pessoasPendentes) {
-    const arquivosList = Array.from(selecionados);
-    return (
-      <div className="rounded-2xl border-2 border-yellow-300 bg-yellow-50/40 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-yellow-500 flex items-center justify-center flex-shrink-0">
-            <Users size={18} className="text-white" />
-          </div>
-          <div>
-            <div className="font-bold text-sm text-yellow-900">Certidão de Casamento detectada</div>
-            <div className="text-xs text-yellow-700">Selecione qual pessoa é o(a) seu(sua) cliente:</div>
-          </div>
-        </div>
-        <div className="space-y-3">
-          {pessoasPendentes.pessoas.map((p, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => selecionarPessoaCertidao(p, arquivosList)}
-              className="w-full text-left p-4 bg-white rounded-xl border-2 border-gray-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all"
-            >
-              <div className="font-bold text-gray-800 mb-1">{p.nome}</div>
-              <div className="text-xs text-gray-500 space-y-0.5">
-                {p.naturalidade && <div>Natural de: {p.naturalidade}</div>}
-                {p.dataNascimento && <div>Nascido(a) em: {p.dataNascimento}</div>}
-                {p.nacionalidade && <div>Nacionalidade: {p.nacionalidade}</div>}
-                {(p.nomePai || p.nomeMae) && (
-                  <div>Filiação: {[p.nomePai, p.nomeMae].filter(Boolean).join(' e ')}</div>
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => setPessoasPendentes(null)}
-          className="mt-3 w-full text-center text-xs text-gray-400 hover:text-gray-600"
-        >
-          Cancelar seleção
-        </button>
-      </div>
-    );
-  }
 
   return (
-    <div className="rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/30 overflow-hidden">
-      {/* Header */}
+    <div className="card overflow-hidden">
       <button
-        type="button"
-        onClick={carregarArquivos}
-        className="w-full flex items-center gap-4 px-6 py-4 hover:bg-blue-50 transition-colors"
+        onClick={() => setAberto(!aberto)}
+        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-gray-50 transition-colors"
       >
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #1a3050, #254268)' }}
-        >
-          <ScanLine size={18} className="text-white" />
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#e8edf4' }}>
+          <ScanLine size={16} style={{ color: '#1a3050' }} />
         </div>
         <div className="flex-1 text-left">
-          <div className="font-semibold text-sm" style={{ color: '#1a3050' }}>
-            Ler Documentos Escaneados
-          </div>
-          <div className="text-xs text-gray-500">
-            Selecione um ou mais documentos da pasta scanner para preencher automaticamente
-          </div>
+          <div className="font-semibold text-gray-800 text-sm">Escanear Documentos</div>
+          <div className="text-xs text-gray-400 mt-0.5">Extrair dados automaticamente de CNH, RG, certidões e comprovantes</div>
         </div>
         {aberto ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
       </button>
 
       {aberto && (
-        <div className="border-t border-blue-100 px-6 pb-5 pt-4">
-          {/* Diretório */}
-          {diretorio && (
-            <div className="flex items-center gap-2 mb-4 p-3 bg-white rounded-xl border border-gray-100">
-              <FolderOpen size={13} className="text-gray-400 flex-shrink-0" />
-              <span className="text-xs text-gray-400 font-mono break-all">{diretorio}</span>
+        <div className="border-t border-gray-100 p-6 space-y-5">
+          {/* Seletor de pasta */}
+          <div>
+            <label className="label-field">Pasta de documentos escaneados</label>
+            <div className="flex gap-2">
+              <div className="flex-1 input-field bg-gray-50 text-gray-500 text-sm truncate flex items-center">
+                {pastaScanner || 'Nenhuma pasta selecionada'}
+              </div>
+              <button onClick={selecionarPasta} className="btn-outline flex-shrink-0">
+                <FolderOpen size={15} />
+                Selecionar
+              </button>
+            </div>
+          </div>
+
+          {/* Lista de arquivos */}
+          {carregandoArquivos ? (
+            <div className="flex items-center gap-2 text-gray-400 text-sm">
+              <Loader2 size={15} className="animate-spin" />
+              Carregando arquivos...
+            </div>
+          ) : arquivos.length === 0 && pastaScanner ? (
+            <div className="p-6 bg-gray-50 rounded-xl text-center">
+              <p className="text-sm text-gray-400">Nenhum documento encontrado na pasta</p>
+              <p className="text-xs text-gray-300 mt-1">Formatos aceitos: PDF, JPG, JPEG, PNG</p>
+            </div>
+          ) : arquivos.length > 0 ? (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="label-field mb-0">Selecionar documentos</label>
+                <button onClick={toggleTodos} className="btn-ghost py-1 px-2 text-xs">
+                  {selecionados.size === arquivos.length ? 'Desmarcar todos' : 'Selecionar todos'}
+                </button>
+              </div>
+              <div className="border border-gray-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
+                {arquivos.map((arquivo) => (
+                  <label
+                    key={arquivo}
+                    className={cn(
+                      'flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors',
+                      selecionados.has(arquivo) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleSelecionado(arquivo)}
+                      className="flex-shrink-0"
+                    >
+                      {selecionados.has(arquivo)
+                        ? <CheckSquare size={18} style={{ color: '#1a3050' }} />
+                        : <Square size={18} className="text-gray-300" />
+                      }
+                    </button>
+                    <span className="text-sm text-gray-700 flex-1 truncate">{arquivo}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">
+                      {arquivo.split('.').pop()?.toUpperCase()}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="mt-2 text-xs text-gray-400">
+                {selecionados.size} de {arquivos.length} selecionado(s)
+              </div>
+            </div>
+          ) : null}
+
+          {/* Botão escanear */}
+          {selecionados.size > 0 && (
+            <button
+              onClick={escanear}
+              disabled={processando}
+              className="btn-primary w-full justify-center"
+            >
+              {processando
+                ? <><Loader2 size={16} className="animate-spin" />Processando {selecionados.size} documento(s)...</>
+                : <><Scan size={16} />Escanear {selecionados.size} documento(s)</>
+              }
+            </button>
+          )}
+
+          {/* Erro */}
+          {erro && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
+              <AlertCircle size={16} className="text-red-500 flex-shrink-0" />
+              <span className="text-sm text-red-700">{erro}</span>
             </div>
           )}
 
-          {/* Resultado do processamento */}
-          {resultado && (
-            <div className="mb-5 space-y-3">
-              {/* Resumo geral */}
-              <div className={cn(
-                'p-4 rounded-2xl border',
-                totalCamposExtraidos > 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'
-              )}>
-                <div className="flex items-start gap-3">
-                  {totalCamposExtraidos > 0
-                    ? <CheckCircle size={18} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-                    : <AlertCircle size={18} className="text-red-500 mt-0.5 flex-shrink-0" />}
-                  <div className="flex-1">
-                    <div className={cn('font-semibold text-sm mb-1', totalCamposExtraidos > 0 ? 'text-emerald-700' : 'text-red-700')}>
-                      {totalCamposExtraidos > 0
-                        ? `${totalCamposExtraidos} campos preenchidos a partir de ${resultado.resultados.filter(r => r.sucesso).length} documento(s)`
-                        : 'Nenhum dado foi identificado nos documentos'}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {totalCamposExtraidos > 0
-                        ? 'Os dados foram preenchidos no formulário. Revise e corrija se necessário.'
-                        : 'Preencha os dados manualmente abaixo.'}
-                    </div>
-                  </div>
-                </div>
+          {/* Seleção de pessoa (certidão de casamento) */}
+          {pessoasCertidao.length > 0 && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+              <div className="flex items-center gap-2 mb-3">
+                <Users size={16} className="text-blue-600" />
+                <span className="font-semibold text-blue-800 text-sm">Certidão com múltiplas pessoas — selecione o cliente:</span>
               </div>
-
-              {/* Resultado por documento */}
-              <div className="space-y-1.5">
-                {resultado.resultados.map((r) => (
-                  <div key={r.arquivo} className="flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-gray-100">
-                    <div className={cn('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0',
-                      r.sucesso ? 'bg-emerald-100' : 'bg-red-50')}>
-                      {r.sucesso
-                        ? <CheckCircle size={13} className="text-emerald-600" />
-                        : <AlertCircle size={13} className="text-red-400" />}
+              <div className="space-y-2">
+                {pessoasCertidao.map((pessoa, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => selecionarPessoaCertidao(idx)}
+                    className={cn(
+                      'w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left',
+                      pessoaSelecionada === idx
+                        ? 'border-blue-500 bg-blue-100'
+                        : 'border-blue-200 bg-white hover:border-blue-400'
+                    )}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                      {(pessoa.nome || '?')[0]}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-gray-700 truncate">{r.arquivo}</div>
-                      <div className="text-xs text-gray-400">
-                        {r.tipoDocumento && <span className="font-medium">{r.tipoDocumento} · </span>}
-                        {r.mensagem}
-                      </div>
+                      <div className="font-semibold text-gray-800 text-sm">{pessoa.nome}</div>
+                      <div className="text-xs text-gray-500">{pessoa.papel} · {pessoa.estadoCivil}</div>
                     </div>
-                    {r.sucesso && (
-                      <span className={cn('badge text-xs flex-shrink-0', confiancaConfig[r.confianca].cor)}>
-                        {confiancaConfig[r.confianca].label}
-                      </span>
-                    )}
-                  </div>
+                    {pessoaSelecionada === idx && <CheckCircle size={16} className="text-blue-600 flex-shrink-0" />}
+                  </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Barra de progresso */}
-          {processando && (
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-500 font-medium">Processando documentos...</span>
-                <span className="text-xs text-gray-500">{progresso}%</span>
-              </div>
-              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${progresso}%`, background: 'linear-gradient(90deg, #1a3050, #c9a84c)' }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Lista de arquivos */}
-          {carregandoLista ? (
-            <div className="flex items-center justify-center py-8 gap-3">
-              <Loader2 size={18} className="animate-spin text-gray-400" />
-              <span className="text-sm text-gray-400">Buscando documentos...</span>
-            </div>
-          ) : arquivos.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="text-3xl mb-2">📂</div>
-              <p className="text-sm text-gray-500 font-medium">Nenhum documento encontrado</p>
-              <p className="text-xs text-gray-400 mt-1">Coloque documentos PDF, JPG ou PNG na pasta &quot;scanner&quot;</p>
-            </div>
-          ) : (
-            <div>
-              {/* Controles de seleção */}
-              <div className="flex items-center justify-between mb-3">
-                <button
-                  type="button"
-                  onClick={toggleTodos}
-                  className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors"
-                >
-                  {selecionados.size === arquivos.length
-                    ? <CheckSquare size={15} style={{ color: '#1a3050' }} />
-                    : <Square size={15} className="text-gray-400" />}
-                  {selecionados.size === arquivos.length ? 'Desmarcar todos' : 'Selecionar todos'}
-                </button>
-                <span className="text-xs text-gray-400">
-                  {arquivos.length} documento(s) disponível(is)
-                </span>
-              </div>
-
-              {/* Lista com checkboxes */}
-              <div className="space-y-2 mb-4">
-                {arquivos.map((arquivo) => {
-                  const sel = selecionados.has(arquivo);
-                  const ext = arquivo.split('.').pop()?.toUpperCase() || 'DOC';
-                  return (
-                    <button
-                      key={arquivo}
-                      type="button"
-                      onClick={() => toggleSelecionado(arquivo)}
-                      disabled={processando}
-                      className={cn(
-                        'w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left disabled:opacity-60 disabled:cursor-not-allowed',
-                        sel
-                          ? 'border-blue-400 bg-blue-50'
-                          : 'border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/30'
-                      )}
-                    >
-                      <div className={cn(
-                        'w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-all border-2',
-                        sel ? 'border-blue-500 bg-blue-500' : 'border-gray-300 bg-white'
-                      )}>
-                        {sel && (
-                          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                            <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </div>
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
-                        style={{ background: ext === 'PDF' ? '#e53e3e' : '#3182ce' }}
-                      >
-                        {ext.slice(0, 3)}
-                      </div>
-                      <span className="flex-1 text-sm font-medium text-gray-700 truncate">{arquivo}</span>
-                      {sel && <CheckCircle size={15} className="text-blue-500 flex-shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Botão de processar */}
-              <button
-                type="button"
-                onClick={processarSelecionados}
-                disabled={selecionados.size === 0 || processando}
-                className={cn(
-                  'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all',
-                  selecionados.size > 0 && !processando
-                    ? 'text-white hover:-translate-y-0.5 hover:shadow-lg'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                )}
-                style={selecionados.size > 0 && !processando ? { background: 'linear-gradient(135deg, #1a3050, #254268)' } : {}}
-              >
-                {processando ? (
-                  <><Loader2 size={15} className="animate-spin" />Lendo documentos...</>
-                ) : (
-                  <>
-                    <Scan size={15} />
-                    {selecionados.size === 0
-                      ? 'Selecione ao menos um documento'
-                      : `Escanear ${selecionados.size} documento${selecionados.size > 1 ? 's' : ''}`}
-                  </>
-                )}
-              </button>
-
-              {selecionados.size > 0 && !processando && (
-                <p className="text-center text-xs text-gray-400 mt-2">
-                  Os documentos serão salvos junto ao cadastro do cliente
-                </p>
+          {/* Resultados */}
+          {resultados && pessoasCertidao.length === 0 && (
+            <div className={cn(
+              'p-4 rounded-xl border flex items-start gap-3',
+              resultados.dadosMesclados && Object.keys(resultados.dadosMesclados).length > 0
+                ? 'bg-emerald-50 border-emerald-200'
+                : 'bg-yellow-50 border-yellow-200'
+            )}>
+              {Object.keys(resultados.dadosMesclados || {}).length > 0 ? (
+                <>
+                  <CheckCircle size={18} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-emerald-700 text-sm mb-1">
+                      {Object.keys(resultados.dadosMesclados).length} campo(s) extraído(s) com sucesso!
+                    </div>
+                    <div className="text-xs text-emerald-600 space-y-0.5">
+                      {resultados.resultados.map(r => (
+                        <div key={r.arquivo}>{r.arquivo}: {r.tipoDocumento || 'Desconhecido'}</div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <AlertCircle size={18} className="text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-yellow-700">
+                    Nenhum dado extraído. Preencha o formulário manualmente.
+                  </div>
+                </>
               )}
             </div>
           )}
