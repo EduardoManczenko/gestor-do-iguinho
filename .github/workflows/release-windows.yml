@@ -1,0 +1,48 @@
+# Gera o instalador NSIS no GitHub e publica o .exe no Release da tag (ex.: v1.0.1).
+# Uso: git tag v1.0.1 && git push origin v1.0.1
+# A versão em package.json (raiz) deve coincidir com a tag (sem o "v").
+
+name: Release Windows installer
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            website/package-lock.json
+
+      - name: Instalar dependências (raiz)
+        run: npm ci
+
+      - name: Instalar dependências (website)
+        working-directory: website
+        run: npm ci
+
+      - name: Build instalador Windows
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist:win
+
+      - name: Publicar Release no GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-app/*.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

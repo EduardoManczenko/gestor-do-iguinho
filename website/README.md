@@ -6,9 +6,17 @@ Sistema de gestão de clientes e geração de contratos jurídicos (app **deskto
 
 ## Distribuição (Windows)
 
-1. Atualiza a versão em `package.json` (raiz do repo) se necessário.
-2. Gera o instalador: `npm run dist:win` → ficheiro em `dist-app/` com o nome **`Gestor.Juridico.Setup.<versão>.exe`** (definido em `build.win.artifactName`).
-3. No GitHub: **Releases → New release** — tag `v<versão>` (ex.: `v1.0.1`), anexa esse `.exe` e publica. O link “última versão” do site usa `releases/latest/download/Gestor.Juridico.Setup.<versão>.exe`; na Vercel podes definir `NEXT_PUBLIC_INSTALLER_VERSION` ou `NEXT_PUBLIC_WINDOWS_INSTALLER_URL` se o nome mudar.
+1. Atualiza a versão em `package.json` (raiz do repo), por exemplo `1.0.2`.
+2. Commit e push para `main`.
+3. Cria e envia a tag (a versão da tag deve coincidir com a do `package.json`, **sem** o `v`):
+   ```bash
+   git tag v1.0.2
+   git push origin v1.0.2
+   ```
+4. O GitHub Actions (`.github/workflows/release-windows.yml`) gera o instalador e publica o ficheiro **`Gestor.Juridico.Setup.<versão>.exe`** no Release dessa tag (torna-se o *latest*).
+5. No repo **`lp-pro-guinho`**, atualiza o campo **`installerVersion`** no `package.json` para a mesma versão e faz deploy na Vercel (sem `.env`).
+
+**Local:** `npm run dist:win` → saída em `dist-app/`.
 
 ## Requisitos
 
