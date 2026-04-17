@@ -1,6 +1,8 @@
 # Gestor Jurídico
 
-Sistema de gestão de clientes e geração de contratos jurídicos.
+Sistema de gestão de clientes e geração de contratos jurídicos (app **desktop** neste repositório).
+
+**Site público / download na web:** repositório separado `lp-pro-guinho` (Next.js na Vercel).
 
 ## Requisitos
 

@@ -8,12 +8,9 @@ import { v4 as uuidv4 } from 'uuid';
 
 // O Electron passa GESTOR_CONFIG_DIR = app.getPath('userData') ao iniciar o Next.js.
 // Em desenvolvimento, cai para ~/.config/gestor-juridico/
-// Na Vercel o filesystem do servidor é efémero; /tmp é gravável entre invocações da mesma instância.
 const APP_CONFIG_DIR =
   process.env.GESTOR_CONFIG_DIR ||
-  (process.env.VERCEL
-    ? path.join('/tmp', 'gestor-juridico')
-    : path.join(os.homedir(), '.config', 'gestor-juridico'));
+  path.join(os.homedir(), '.config', 'gestor-juridico');
 
 const APP_CONFIG_FILE = path.join(APP_CONFIG_DIR, 'app-config.json');
 
