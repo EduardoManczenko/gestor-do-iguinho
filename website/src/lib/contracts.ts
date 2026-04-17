@@ -5,8 +5,7 @@ import Docxtemplater from 'docxtemplater';
 import { DadosCliente, DadosTestemunha } from './types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-const TEMPLATES_DIR = path.join(process.cwd(), '..', 'contratos-template');
+import { TEMPLATES_DIR } from './storage';
 
 function dataAtualFormatada(): string {
   return format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });

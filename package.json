@@ -1,6 +1,6 @@
 {
   "name": "gestor-juridico",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Gestor de clientes e geração de contratos jurídicos",
   "main": "electron/main.js",
   "scripts": {
@@ -16,21 +16,22 @@
     "appId": "com.gestor.juridico",
     "productName": "Gestor Jurídico",
     "asar": true,
+    "asarUnpack": [
+      "website/.next/standalone/**"
+    ],
     "directories": {
       "output": "dist-app",
       "buildResources": "assets"
     },
     "files": [
       "electron/**/*",
-      "website/.next/**/*",
-      "website/node_modules/**/*",
+      "website/.next/standalone/**/*",
       "website/package.json",
-      "website/next.config.ts",
-      "contratos-template/**/*"
+      "website/next.config.ts"
     ],
     "extraResources": [
       {
-        "from": "contratos-template",
+        "from": "website/contratos-template",
         "to": "contratos-template",
         "filter": ["**/*"]
       }

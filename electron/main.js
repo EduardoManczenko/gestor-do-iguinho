@@ -16,6 +16,20 @@ function getUserDataDir() {
   return app.getPath('userData');
 }
 
+/** Suporta layout flat (`standalone/server.js`) ou monorepo antigo (`standalone/website/server.js`). */
+function resolveStandalonePaths() {
+  const base = path.join(NEXT_DIR, '.next', 'standalone');
+  const flatServer = path.join(base, 'server.js');
+  if (fs.existsSync(flatServer)) {
+    return { serverScript: flatServer, serverCwd: base };
+  }
+  const nestedServer = path.join(base, 'website', 'server.js');
+  if (fs.existsSync(nestedServer)) {
+    return { serverScript: nestedServer, serverCwd: path.dirname(nestedServer) };
+  }
+  return null;
+}
+
 // ─── Servidor Next.js ─────────────────────────────────────────────────────
 
 function startNextServer() {
@@ -23,22 +37,36 @@ function startNextServer() {
 
   // Garante que a pasta de dados existe
   fs.mkdirSync(userDataDir, { recursive: true });
+  const scannerDirDefault = path.join(userDataDir, 'scanner');
+  fs.mkdirSync(scannerDirDefault, { recursive: true });
 
-  const env = {
+  const templatesDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'contratos-template')
+    : path.join(__dirname, '..', 'website', 'contratos-template');
+
+  const baseEnv = {
     ...process.env,
     PORT: String(PORT),
     GESTOR_CONFIG_DIR: userDataDir,
+    GESTOR_TEMPLATES_DIR: templatesDir,
+    GESTOR_DEFAULT_SCANNER_DIR: scannerDirDefault,
     NODE_ENV: 'production',
   };
 
-  // Verifica se existe o servidor standalone (build de produção)
-  const standaloneServer = path.join(NEXT_DIR, '.next', 'standalone', 'server.js');
-  const hasStandalone = fs.existsSync(standaloneServer);
+  const standalonePaths = resolveStandalonePaths();
 
-  if (hasStandalone) {
+  if (standalonePaths) {
+    // Instaladores finais não incluem Node no PATH: usamos o próprio binário do
+    // Electron em modo Node (ELECTRON_RUN_AS_NODE), que sempre existe no pacote.
+    const env = { ...baseEnv };
+    const useElectronAsNode = app.isPackaged;
+    if (useElectronAsNode) {
+      env.ELECTRON_RUN_AS_NODE = '1';
+    }
+    const runner = useElectronAsNode ? process.execPath : 'node';
     console.log('[Electron] Iniciando Next.js standalone...');
-    serverProcess = spawn('node', [standaloneServer], {
-      cwd: path.join(NEXT_DIR, '.next', 'standalone'),
+    serverProcess = spawn(runner, [standalonePaths.serverScript], {
+      cwd: standalonePaths.serverCwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -59,7 +87,7 @@ function startNextServer() {
       [script, '-p', String(PORT)],
       {
         cwd: NEXT_DIR,
-        env,
+        env: baseEnv,
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: isWin, // Necessário no Windows para executar .cmd
       }
@@ -79,14 +107,21 @@ function startNextServer() {
   serverProcess.on('error', (err) => {
     console.error('[Electron] Falha ao iniciar servidor:', err);
   });
+
+  serverProcess.on('exit', (code, signal) => {
+    if (code !== 0 && code !== null) {
+      console.error('[Electron] Servidor encerrou com código', code, signal || '');
+    }
+  });
 }
 
 // ─── Aguardar servidor ─────────────────────────────────────────────────────
 
 function waitForServer(callback, tentativas = 60, intervalo = 1000) {
   http.get(`http://localhost:${PORT}/api/clientes`, (res) => {
+    res.resume();
     if (res.statusCode < 500) {
-      callback();
+      callback(null);
     } else {
       retry();
     }
@@ -97,7 +132,7 @@ function waitForServer(callback, tentativas = 60, intervalo = 1000) {
   function retry() {
     if (tentativas <= 0) {
       console.error('[Electron] Servidor não respondeu após várias tentativas.');
-      callback(); // Tenta carregar mesmo assim
+      callback(new Error('Servidor não respondeu'));
       return;
     }
     setTimeout(() => waitForServer(callback, tentativas - 1, intervalo), intervalo);
@@ -145,10 +180,22 @@ function createWindow() {
   });
 
   // Aguarda o servidor e carrega a aplicação
-  waitForServer(() => {
-    if (mainWindow) {
-      mainWindow.loadURL(`http://localhost:${PORT}`);
+  waitForServer((err) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (err) {
+      dialog.showErrorBox(
+        'Gestor Jurídico',
+        'Não foi possível iniciar o sistema interno. Verifique se a porta 3157 está livre, se o antivírus não bloqueou o app e reinstale a última versão do site.'
+      );
+      const html =
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Erro</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#f8fafc;padding:32px">' +
+        '<h1 style="color:#1a3050">Falha ao iniciar</h1>' +
+        '<p style="color:#334155">O servidor local não respondeu. Feche outros programas que usem a porta <strong>3157</strong> ou reinstale o Gestor Jurídico.</p>' +
+        '</body></html>';
+      mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      return;
     }
+    mainWindow.loadURL(`http://localhost:${PORT}`);
   });
 }
 

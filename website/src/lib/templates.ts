@@ -2,8 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import PizZip from 'pizzip';
 import { Template, TagEspecifica } from './types';
-
-const TEMPLATES_DIR = path.join(process.cwd(), '..', 'contratos-template');
+import { TEMPLATES_DIR } from './storage';
 
 // ─── Tags do cadastro do cliente (preenchidas automaticamente) ─────────────
 const TAGS_CLIENTE = new Set([
