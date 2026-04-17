@@ -38,7 +38,8 @@
     ],
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "artifactName": "Gestor.Juridico.Setup.${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,

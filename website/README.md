@@ -4,6 +4,12 @@ Sistema de gestão de clientes e geração de contratos jurídicos (app **deskto
 
 **Site público / download na web:** repositório separado `lp-pro-guinho` (Next.js na Vercel).
 
+## Distribuição (Windows)
+
+1. Atualiza a versão em `package.json` (raiz do repo) se necessário.
+2. Gera o instalador: `npm run dist:win` → ficheiro em `dist-app/` com o nome **`Gestor.Juridico.Setup.<versão>.exe`** (definido em `build.win.artifactName`).
+3. No GitHub: **Releases → New release** — tag `v<versão>` (ex.: `v1.0.1`), anexa esse `.exe` e publica. O link “última versão” do site usa `releases/latest/download/Gestor.Juridico.Setup.<versão>.exe`; na Vercel podes definir `NEXT_PUBLIC_INSTALLER_VERSION` ou `NEXT_PUBLIC_WINDOWS_INSTALLER_URL` se o nome mudar.
+
 ## Requisitos
 
 - Node.js 18+
